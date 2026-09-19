@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_price_history_scraped_at ON price_history(scraped
 CREATE TABLE IF NOT EXISTS scrape_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tracked_product_id UUID NOT NULL REFERENCES tracked_products(id) ON DELETE CASCADE,
-    status TEXT NOT NULL CHECK (status IN ('SUCCESS', 'FAILED')),
+    status TEXT NOT NULL CHECK (status IN ('SUCCESS', 'FAILED', 'RETRIED')),
     attempts INTEGER NOT NULL DEFAULT 1,
     duration_ms INTEGER NOT NULL,
     price_extracted NUMERIC(12, 2),

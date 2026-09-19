@@ -107,7 +107,23 @@ test('Backend API Integration Tests', async (t) => {
     assert.ok(body.jobId);
   });
 
-  await t.test('8. DELETE /api/tracked-products/:id removes tracked product', async () => {
+  await t.test('8. POST /api/scrape/cron prevents concurrent run with 409 Conflict', async () => {
+    const secret = process.env.CRON_SECRET || 'dev-cron-secret-change-in-prod';
+    // Immediately fire second request while background scraper holds lock
+    const res = await fetch(`${baseUrl}/api/scrape/cron`, {
+      method: 'POST',
+      headers: {
+        'x-cron-secret': secret
+      }
+    });
+
+    assert.equal(res.status, 409);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('Concurrent scraper run prevented'));
+  });
+
+  await t.test('9. DELETE /api/tracked-products/:id removes tracked product', async () => {
     const res = await fetch(`${baseUrl}/api/tracked-products/${createdProductId}`, {
       method: 'DELETE'
     });

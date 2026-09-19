@@ -312,6 +312,7 @@ export default function App() {
                     const isScraping = actionInProgress[product.id] === 'scraping';
                     const isUntracking = actionInProgress[product.id] === 'untracking';
                     const isSuccess = product.last_scrape_status === 'SUCCESS';
+                    const isRetried = product.last_scrape_status === 'RETRIED';
                     const isFailed = product.last_scrape_status === 'FAILED';
                     const isPending = product.last_scrape_status === 'PENDING';
 
@@ -375,6 +376,11 @@ export default function App() {
                           {isSuccess && (
                             <span className="badge badge-success" title="Latest scrape completed and validated">
                               <CheckCircle size={12} className="inline-icon" /> SUCCESS
+                            </span>
+                          )}
+                          {isRetried && (
+                            <span className="badge badge-warning" title="Scrape completed after retry attempts">
+                              <RefreshCw size={12} className="inline-icon" /> RETRIED
                             </span>
                           )}
                           {isFailed && (

@@ -108,6 +108,34 @@ test('Database Layer - Core Data Integrity & Lock Tests', async (t) => {
     await db.releaseCronLock({ lockId: 'test_lock', owner: 'worker-2' });
   });
 
+  await t.test('5. Retried scrape sets status to RETRIED, creates history, and logs RETRIED', async () => {
+    const product = await db.getTrackedProductByStoreId(9999);
+
+    await db.recordScrapeResult({
+      tracked_product_id: product.id,
+      success: true,
+      attempts: 2, // Retried on attempt 2
+      duration_ms: 2100,
+      price: 15999.00,
+      stock: 4,
+      stock_status: 'IN_STOCK'
+    });
+
+    const updated = await db.getTrackedProductById(product.id);
+    assert.equal(updated.current_price, 15999.00);
+    assert.equal(updated.current_stock, 4);
+    assert.equal(updated.last_scrape_status, 'RETRIED', 'Status must be RETRIED when attempts > 1 and successful');
+
+    const history = await db.getPriceHistory(product.id);
+    assert.equal(history.length, 2, 'Price history must record successful retried scrape');
+    assert.equal(history[history.length - 1].price, 15999.00);
+
+    const logs = await db.getScrapeLogs(product.id);
+    assert.equal(logs.length, 3);
+    assert.equal(logs[0].status, 'RETRIED');
+    assert.equal(logs[0].attempts, 2);
+  });
+
   // Cleanup
   const p = await db.getTrackedProductByStoreId(9999);
   if (p) await db.deleteTrackedProduct(p.id);

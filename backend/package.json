@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "build": "npx playwright install chromium",
+    "build": "npx playwright install --with-deps chromium || npx playwright install chromium",
     "scrape:headed": "node src/scripts/runScraperHeaded.js",
     "scrape:headless": "node src/scripts/runScraperHeadless.js",
     "test": "node --test tests/**/*.test.js"

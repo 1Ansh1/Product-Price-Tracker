@@ -9,6 +9,14 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 
 const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_KEY && !SUPABASE_URL.includes('your-project'));
 
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
+if (isProduction && !isSupabaseConfigured) {
+  const errMsg = '[DB FATAL] Production environment detected (NODE_ENV=production or RENDER=true), but valid Supabase credentials (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY) are not configured. Production must use Supabase PostgreSQL and cannot silently fall back to the local database.';
+  console.error(errMsg);
+  throw new Error(errMsg);
+}
+
 let supabase = null;
 if (isSupabaseConfigured) {
   supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -155,13 +163,20 @@ export const db = {
     error_message = null
   }) {
     const now = new Date().toISOString();
+    const numAttempts = attempts || 1;
+
+    // Determine honest status:
+    // - Initial clean scrape: SUCCESS
+    // - Scrape that succeeded after retries: RETRIED
+    // - Exhausted retries with error: FAILED
+    const finalStatus = success ? (numAttempts > 1 ? 'RETRIED' : 'SUCCESS') : 'FAILED';
 
     // 1. Log the scrape outcome honestly regardless of result
     const logEntry = {
       id: crypto.randomUUID(),
       tracked_product_id,
-      status: success ? 'SUCCESS' : 'FAILED',
-      attempts: attempts || 1,
+      status: finalStatus,
+      attempts: numAttempts,
       duration_ms: duration_ms || 0,
       price_extracted: success ? price : null,
       stock_extracted: success ? stock : null,
@@ -199,7 +214,7 @@ export const db = {
             current_stock: Number(stock),
             current_stock_status: stock_status,
             last_scraped_at: now,
-            last_scrape_status: 'SUCCESS',
+            last_scrape_status: finalStatus,
             last_scrape_error: null,
             updated_at: now
           })
@@ -212,7 +227,7 @@ export const db = {
           product.current_stock = Number(stock);
           product.current_stock_status = stock_status;
           product.last_scraped_at = now;
-          product.last_scrape_status = 'SUCCESS';
+          product.last_scrape_status = finalStatus;
           product.last_scrape_error = null;
           product.updated_at = now;
         }

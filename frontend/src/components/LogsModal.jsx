@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
-import { X, FileText, CheckCircle2, XCircle, AlertCircle, Clock } from 'lucide-react';
+import { X, FileText, CheckCircle2, XCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 
 export function LogsModal({ product, onClose }) {
   const [logs, setLogs] = useState([]);
@@ -69,14 +69,28 @@ export function LogsModal({ product, onClose }) {
                 <tbody>
                   {logs.map(log => {
                     const isSuccess = log.status === 'SUCCESS';
+                    const isRetried = log.status === 'RETRIED';
+                    const hasSucceeded = isSuccess || isRetried;
+
                     return (
-                      <tr key={log.id} className={isSuccess ? '' : 'row-failure'}>
+                      <tr key={log.id} className={hasSucceeded ? '' : 'row-failure'}>
                         <td>{new Date(log.created_at).toLocaleString()}</td>
                         <td>
-                          <span className={`badge ${isSuccess ? 'badge-success' : 'badge-danger'}`}>
-                            {isSuccess ? <CheckCircle2 size={12} className="inline-icon" /> : <XCircle size={12} className="inline-icon" />}
-                            {log.status}
-                          </span>
+                          {isSuccess && (
+                            <span className="badge badge-success">
+                              <CheckCircle2 size={12} className="inline-icon" /> SUCCESS
+                            </span>
+                          )}
+                          {isRetried && (
+                            <span className="badge badge-warning">
+                              <RefreshCw size={12} className="inline-icon" /> RETRIED
+                            </span>
+                          )}
+                          {!hasSucceeded && (
+                            <span className="badge badge-danger">
+                              <XCircle size={12} className="inline-icon" /> FAILED
+                            </span>
+                          )}
                         </td>
                         <td>
                           <span className="attempt-pill">
@@ -85,7 +99,7 @@ export function LogsModal({ product, onClose }) {
                         </td>
                         <td>{log.duration_ms ? `${log.duration_ms}ms` : '—'}</td>
                         <td className="log-detail-cell">
-                          {isSuccess ? (
+                          {hasSucceeded ? (
                             <span className="success-text">
                               Price: ₹{Number(log.price_extracted).toLocaleString()} · Stock: {log.stock_extracted}
                             </span>

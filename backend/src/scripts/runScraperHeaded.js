@@ -29,13 +29,40 @@ async function main() {
     products = [sample1, sample2];
   }
 
+  const includeFailure = process.argv.includes('--include-failure');
+  if (includeFailure) {
+    const failProduct = await db.addTrackedProduct({
+      store_product_id: 99999,
+      name: 'Fault Demo Device 99999',
+      brand: 'Diagnostic',
+      category: 'Testing',
+      sku: 'FAIL-99999',
+      url: 'https://demo.inelabteamdev.com/product/99999'
+    }).catch(() => db.getTrackedProductByStoreId(99999));
+    if (failProduct && !products.find(p => p.store_product_id === 99999)) {
+      products.push(failProduct);
+    }
+  }
+
   const engine = new ScraperEngine({
     headed: true, // Visibly launch Chromium with slowMo
     maxAttempts: 3,
-    timeout: 30000
+    timeout: 30000,
+    demoFaultInjection: true // Enables isolated demo fault injection to exercise real retry loop
   });
 
-  const result = await engine.runJob({ products, recordToDb: true });
+  // Flag the first product to exercise the real retry loop (Attempt 1 transient fault -> Attempt 2 real storefront success)
+  const productsToRun = products.map((p, idx) => ({
+    ...p,
+    injectTransientFault: idx === 0
+  }));
+
+  console.log(`[HEADED DEMO] Product 1 (${productsToRun[0]?.name}) will demonstrate the RETRY PATH (Attempt 1 fault -> Attempt 2 success).`);
+  if (productsToRun[1]) {
+    console.log(`[HEADED DEMO] Product 2 (${productsToRun[1]?.name}) will demonstrate the DIRECT SUCCESS PATH (Attempt 1 success).`);
+  }
+
+  const result = await engine.runJob({ products: productsToRun, recordToDb: true });
 
   console.log('====================================================');
   console.log(`  HEADED SCRAPE RUN FINISHED`);

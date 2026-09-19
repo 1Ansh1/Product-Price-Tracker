@@ -140,7 +140,7 @@ cp frontend/.env.example frontend/.env
 ```bash
 npm test
 ```
-Runs 23 automated tests covering database integrity, price validation, API routes, and live mock store scraping.
+Runs 25 automated test units (21 distinct named leaf assertions across 4 test suites: 9 Backend API, 5 Database Integrity & Distributed Locking, 1 Live Mock Storefront Scraper, and 6 Value Validator tests) using Node.js built-in test runner (`node:test`).
 
 ---
 
@@ -151,6 +151,7 @@ Runs 23 automated tests covering database integrity, price validation, API route
 npm run start:backend
 ```
 Backend starts on `http://localhost:3001` (Health check: `http://localhost:3001/health`).
+*(Note: If `NODE_ENV=production` is set, valid Supabase PostgreSQL credentials are required; the service fails fast and refuses to silently fall back to an in-memory repository).*
 
 ### Running the Frontend
 In another terminal:
@@ -163,6 +164,10 @@ Frontend runs on `http://localhost:5173`.
 To visibly launch Chromium and watch the interaction, challenge resolution, and price extraction in real time:
 ```bash
 npm run scrape:headed
+```
+The headed runner demonstrates both the **retry path** (Attempt 1 transient storefront response failure $\to$ exponential backoff $\to$ Attempt 2 real mock storefront success with status `RETRIED`) and the **direct success path** (Attempt 1 clean success with status `SUCCESS`). To also demonstrate persistent 3-attempt failure, run:
+```bash
+npm run scrape:headed -- --include-failure
 ```
 
 ---
@@ -199,19 +204,21 @@ npm run scrape:headed
 
 ## 8. Production Deployment
 
-### Backend on Render
+### Backend on Render (Recommended: Docker Web Service)
+Because Playwright Chromium requires Linux shared OS libraries (`libnss3`, `libatk1.0-0`, `libgbm1`, etc.) that cannot be installed at build time by unprivileged non-root users on native Web Services, deploying via Docker is strongly recommended:
+
 1. Create a **Web Service** on [render.com](https://render.com) connected to your repository.
 2. Root Directory: `backend`
-3. Environment: `Node`
-4. Build Command: `npm install && npx playwright install chromium`
-5. Start Command: `node src/server.js`
-6. Add Environment Variables in the Render dashboard:
+3. Environment / Runtime: **Docker** (Render will automatically detect `backend/Dockerfile` based on `mcr.microsoft.com/playwright:v1.50.1-noble`).
+4. Add Environment Variables in the Render dashboard:
    - `NODE_ENV`: `production`
-   - `PORT`: `10000`
+   - `PORT`: `3001`
    - `SUPABASE_URL`: `https://<ref>.supabase.co`
    - `SUPABASE_SERVICE_ROLE_KEY`: `<service_role_key>`
    - `CRON_SECRET`: `<secure_random_string>`
    - `MOCK_STORE_URL`: `https://demo.inelabteamdev.com`
+
+*(Alternative Native Node Service: Root directory `backend`, Runtime `Node`, Build command `npm install && (npx playwright install --with-deps chromium || npx playwright install chromium)`, Start command `node src/server.js`).*
 
 ### Frontend on Vercel
 1. Create a new project on [vercel.com](https://vercel.com) pointing to the `frontend` directory.
@@ -231,8 +238,8 @@ npm run scrape:headed
 - [x] **Product Tracking**: Duplicate prevention, canonical URL preservation, and initial scrape triggering.
 - [x] **Scheduled Scraping**: Protected `POST /api/scrape/cron` with distributed locking.
 - [x] **Strict Validation**: Normalized fullwidth digits, stripped zero-width characters, validated strictly positive prices.
-- [x] **Data Integrity**: Price history updated ONLY on valid scrape; previous valid prices preserved on failure.
+- [x] **Data Integrity**: Price history updated ONLY on valid scrape; previous valid prices preserved on failure; retried scrapes assigned status `RETRIED`.
 - [x] **Audit Trail**: Every scrape logged with attempts, duration, and diagnostic errors.
-- [x] **Headed Demo**: `npm run scrape:headed` visibly executes in Chromium with slowMo.
+- [x] **Headed Demo**: `npm run scrape:headed` visibly executes in Chromium with slowMo, demonstrating both retry and direct success paths.
 - [x] **Full-Stack Dashboard**: React UI with search, tracked products table, Recharts price trend modal, and logs modal.
-- [x] **Test Coverage**: 23 automated unit and integration tests passing.
+- [x] **Test Coverage**: 25 automated unit and integration tests passing (21 named leaf assertions).

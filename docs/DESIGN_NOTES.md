@@ -79,3 +79,35 @@ Prior to writing the scraper implementation, live network, DOM, and JavaScript b
 - The scraper operates with a single browser instance per run, processing active tracked products sequentially with isolated pages/contexts and guaranteed cleanup.
 - Playwright Chromium is launched with memory-saving flags:
   `--no-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu`, `--no-zygote`.
+
+---
+
+## 5. Engineering Corrections & Verification Audit Trail
+
+During final verification and end-to-end audit against the INE assignment specification, several critical edge cases and configuration traps were discovered and corrected:
+
+### A. Production Database Configuration (Fail-Fast vs. Silent Fallback)
+* **Defect Identified**: The database module previously contained an in-memory repository for local testing. If Supabase credentials were missing or contained placeholders in production (`NODE_ENV=production` or `RENDER=true`), the service would log a warning and silently fall back to in-memory storage, causing all tracked products, price history, and logs to vanish on Render dyno restarts.
+* **Correction**: Implemented fail-fast production enforcement in `backend/src/db/index.js`. If `NODE_ENV === 'production'` or `RENDER === 'true'` and Supabase credentials are missing, the process immediately throws a fatal exception on startup, preventing any silent fallback.
+
+### B. Linux / Render Playwright Chromium System Dependencies
+* **Defect Identified**: The initial build script ran `npx playwright install chromium`. On Debian/Ubuntu Linux environments like Render Web Services, this installs the Chromium executable but omits required OS shared libraries (`libnss3`, `libatk1.0-0`, `libgbm1`, `libasound2`, etc.). Because Render's native Node environment runs without root (`sudo`) privileges, running `npx playwright install-deps` fails.
+* **Correction**: 
+  1. Provided a production `backend/Dockerfile` based on Microsoft's official image `mcr.microsoft.com/playwright:v1.50.1-noble` where all Linux shared libraries are pre-installed.
+  2. Updated `backend/package.json` build command to `npx playwright install --with-deps chromium || npx playwright install chromium`.
+
+### C. Retried Scrape Outcome & Schema CHECK Constraint
+* **Defect Identified**: A scrape succeeding after retries was previously recorded simply as `SUCCESS`, obscuring that retries had occurred. Furthermore, `schema.sql` had a CHECK constraint `status IN ('SUCCESS', 'FAILED')` which prohibited a `'RETRIED'` status.
+* **Correction**: 
+  1. Updated `schema.sql` to `CHECK (status IN ('SUCCESS', 'FAILED', 'RETRIED'))`.
+  2. Updated `recordScrapeResult` to assign `RETRIED` whenever `success === true && attempts > 1`.
+  3. Updated UI (`App.jsx`, `LogsModal.jsx`) with distinct amber `'RETRIED'` badges.
+
+### D. Headed Demonstration: Isolated Demo Fault Injection
+* **Challenge**: The live storefront's native intermittent failures (17.5% click drops) are probabilistic. Relying on random chance during a 2-minute video presentation could result in only clean scrapes or non-deterministic behavior.
+* **Correction**: Implemented a clearly isolated `demoFaultInjection` flag in `ScraperEngine` and enabled it in `runScraperHeaded.js`. On Attempt 1, the scraper simulates a transient storefront 504 gateway timeout, exercising the catch block and exponential backoff. On Attempt 2, the scraper executes against the real live storefront, visibly solving the challenge and extracting real price data without faking any logs.
+
+### E. Test Suite Count Clarification
+* **Discrepancy**: Prior notes cited "23 tests" while test runners displayed 19 leaf assertions.
+* **Resolution**: Node's built-in test runner (`node:test`) tallies each outer suite (`test('...')`) as a test node. The suite contains 21 distinct named leaf assertions across 4 suites (totaling 25 test points in `node:test` after adding retried status and distributed cron lock tests).
+

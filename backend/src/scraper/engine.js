@@ -7,6 +7,7 @@ export class ScraperEngine {
     this.isHeaded = Boolean(options.headed);
     this.maxAttempts = options.maxAttempts || 3;
     this.timeout = options.timeout || 25000;
+    this.demoFaultInjection = Boolean(options.demoFaultInjection ?? (process.env.DEMO_FAULT_INJECTION === 'true'));
   }
 
   /**
@@ -89,6 +90,12 @@ export class ScraperEngine {
         console.log(`[SCRAPER] Product ${product.store_product_id} ("${product.name}") - Attempt ${attempt}/${this.maxAttempts}`);
         page = await browser.newPage();
         page.setDefaultTimeout(this.timeout);
+
+        // Clearly isolated demo-only fault injection to exercise real retry loop against live storefront
+        if (this.demoFaultInjection && attempt === 1 && product.injectTransientFault) {
+          console.log(`[DEMO FAULT INJECTION] Injecting transient storefront response failure on Attempt 1 for Product ${product.store_product_id} to verify retry logic...`);
+          throw new Error('Transient 504 Gateway Timeout from storefront (Injected for demonstration of retry logic)');
+        }
 
         // 1. Navigate
         await page.goto(product.url, { waitUntil: 'networkidle', timeout: this.timeout });
